@@ -90,39 +90,139 @@ Tower.Router = Ember.Router.extend
             controller.exit()
           else
             controller.exitAction(action)
-
   insertRoute: (route) ->
-    if route.state
-      path = route.state
-    else
-      path = []
-      route.path.replace /\/([^\/]+)/g, (_, $1) ->
-        path.push($1.split('.')[0])
+    
+    return undefined unless _.include(route.methods, "GET") && route.options.action? # we only care about the GET methods for ember also lets assume a action is designated, to weed out non ember get routes / we can clean this up and maybe use a different identified
+    
+    #IMO - Paths should be calculated from the url rather than calculating the URL from the path
+      #if route.state 
+      #  path = route.state
+      #else
+      #  path = []
+      #  route.path.replace /\/([^\/]+)/g, (_, $1) ->
+      #    path.push($1.split('.')[0])
 
-      path = path.join('.')
-
-    return undefined if !path || path == ""
+      #  path = path.join('.')
+    
+      #return undefined if !path || path == ""
+    #/IMO
     
     routeName = route.options.path.replace(".:format?", "")
     
-    state   = @root
+    #get all components of our route
+    
+    urlPieces = routeName.split('/')     
+   
+    urlPieces = _.reject urlPieces, (piece)  -> piece is ""
+    namespaces = urlPieces[0...(urlPieces.length-1)]
+
+    
+    c = 0
+    
+    #find or create name spaces
     controllerName = route.controller.name
-    methodName = route.options.name if route.options.name?
-    fit = methodName
-    fit = 'index' if methodName == 'showRoot'
+    state = @root
     
-    Tower.router.root[methodName] = Ember.State.transitionTo(fit)
-    Tower.router.root.eventTransitions[methodName] = fit
+    routeNameSpaceHash = {}
     
-    myAction = route.options.action if route.options.action?
+    statePath = ["root"]
     
-    s = @createControllerActionState(controllerName, myAction, routeName)
-    states = Ember.get(state, 'states')
-    if !states
+    #build out or traverse the namespace to the action we are creating
+    
+    #names space is the (/blogs/posts) parts of /blogs/posts/:id for example
+    
+    for namespace in namespaces
+      states = Ember.get(state, 'states')
+      if !states
         states = {}
         Ember.set(state, 'states', states)
+        
+      ns = namespace.replace(":", "")
+      s = Ember.get(states, ns)
+      #console.log(state.name)
+      if s
+        state = s
+      else
+        routePath = '/'
+        routePath += namespace
+        s = @createControllerActionState(controllerName, "index", routePath) 
+        state.setupChild(states, ns, s)
+        #console.log(state)
+        #console.log("ns was: " + state.name, "ns will be: " + s.name)
+        state = s
+        
+        
+      statePath.push(state.name);
+
     
-    state.setupChild(states, fit, s)
+    states = Ember.get(state, 'states')
+    if !states
+      states = {}
+      Ember.set(state, 'states', states)
+    
+
+    #i am in the root ns everything that isnt a namespace at the level would be an index route
+    methodName = route.options.name
+    stateName = route.state
+  
+    targetSegment = urlPieces[urlPieces.length - 1]
+    myAction = route.options.action if route.options.action?
+    children = state.get('childStates')
+    #console.log(children)
+    s = _.find children, (state) -> state.name == targetSegment
+    #console.log(children, s, targetSegment)
+    if targetSegment?
+      statePath = [] 
+      statePath = [targetSegment] if namespaces.length == 0
+    statePath.push(myAction)
+  
+    statePath = statePath.join(".")
+    
+
+    
+
+    if !s
+      isRoot = !targetSegment?
+      targetSegment = "root" unless targetSegment?
+      routePath = '/' 
+      routePath += targetSegment unless isRoot
+    
+      
+      states = Ember.get(state, 'states')
+      if !states
+        states = {}
+        Ember.set(state, 'states', states)
+      s = @createControllerActionState(controllerName, myAction, routePath)
+      if namespaces.length == 0
+        state.setupChild(states, targetSegment, s) 
+      else
+        state.setupChild(states, targetSegment.replace(":", ""), s)
+      state = s
+      
+      #if namespaces.length == 0 #handle root indexes
+      states = Ember.get(state, 'states')
+      if !states
+        states = {}
+        Ember.set(state, 'states', states)
+      
+      s = @createControllerActionState(controllerName, myAction, '/') #this where we want to land usually for actions, why?
+      state.setupChild(states, myAction, s)
+      state = s if namespaces.length > 0 #not index?
+    
+    #walk up state tree and build a name
+    pState = state
+    pathTree = []
+    while true
+      pState = pState.parentState
+      break if !pState? || !pState.name?
+      pathTree.push(pState.name)
+    
+    pathNamespace = pathTree.reverse().join(".")
+    statePath = "#{pathNamespace}.#{statePath}" if pathNamespace != ""
+    console.log(statePath)
+      
+    Tower.router.root[methodName] = Ember.State.transitionTo(statePath)
+    Tower.router.root.eventTransitions[methodName] = statePath
 
     undefined
 

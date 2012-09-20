@@ -26,6 +26,10 @@ Tower.Router = Ember.Router.extend
 
   # createStatesByRoute(Tower.router, 'posts.show.comments.index')
   createControllerActionState: (name, action, route) ->
+    
+    
+    #console.log(name, action, route)
+    
     name = _.camelize(name, true) #=> postsController
 
     # @todo tmp hack
@@ -40,7 +44,6 @@ Tower.Router = Ember.Router.extend
     # Tower.router.indexPosts = Ember.State.transitionTo('root.posts.index')
     # Need to think about this more...
     # Tower.router[actionMethod] = Ember.State.transitionTo("root.#{_.camelize(name, true).replace(/Controller$/, '')}.#{action}")
-
     Ember.Route.create
       route: route
 
@@ -64,6 +67,7 @@ Tower.Router = Ember.Router.extend
           if @name == controller.collectionName
             controller.enter()
           else
+            
             controller.enterAction(action)
 
       connectOutlets: (router, params) ->
@@ -145,10 +149,9 @@ Tower.Router = Ember.Router.extend
       else
         routePath = '/'
         routePath += namespace
-        s = @createControllerActionState(controllerName, "index", routePath) 
+        s = @createControllerActionState(controllerName, "find", routePath) 
         state.setupChild(states, ns, s)
-        #console.log(state)
-        #console.log("ns was: " + state.name, "ns will be: " + s.name)
+
         state = s
         
         
@@ -161,7 +164,7 @@ Tower.Router = Ember.Router.extend
       Ember.set(state, 'states', states)
     
 
-    #i am in the root ns everything that isnt a namespace at the level would be an index route
+
     methodName = route.options.name
     stateName = route.state
   
@@ -192,11 +195,8 @@ Tower.Router = Ember.Router.extend
       if !states
         states = {}
         Ember.set(state, 'states', states)
-      s = @createControllerActionState(controllerName, myAction, routePath)
-      if namespaces.length == 0
-        state.setupChild(states, targetSegment, s) 
-      else
-        state.setupChild(states, targetSegment.replace(":", ""), s)
+      s = @createControllerActionState(controllerName, "find", routePath)
+      state.setupChild(states, targetSegment.replace(":", ""), s)
       state = s
       
       #if namespaces.length == 0 #handle root indexes
@@ -219,7 +219,6 @@ Tower.Router = Ember.Router.extend
     
     pathNamespace = pathTree.reverse().join(".")
     statePath = "#{pathNamespace}.#{statePath}" if pathNamespace != ""
-    console.log(statePath)
       
     Tower.router.root[methodName] = Ember.State.transitionTo(statePath)
     Tower.router.root.eventTransitions[methodName] = statePath

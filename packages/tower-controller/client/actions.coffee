@@ -1,5 +1,8 @@
 Tower.ControllerActions =
   # Default implementation for the 'index' action.
+  find: (params) ->
+    #just a stub for routes
+    
   index: (params) ->
     @findCollection (error, collection) =>
       @render 'index'

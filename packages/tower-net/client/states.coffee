@@ -49,17 +49,17 @@ Tower.Router = Ember.Router.extend
 
       # So you can give it a post and it returns the attributes
       #
-      # @todo
+      # @todo        
       serialize: (router, context) ->
         attributes  = context.toJSON() if context && context.toJSON
         attributes || context # i.e. "params"
 
       deserialize: (router, params) ->
         params
-
+      
       enter: (router, transition) ->
         @_super(router, transition)
-
+        console.log "enter: #{@name}"
         console.log "enter: #{@name}" if Tower.debug
         controller  = Ember.get(Tower.Application.instance(), name)
 
@@ -144,18 +144,28 @@ Tower.Router = Ember.Router.extend
       ns = namespace.replace(":", "")
       s = Ember.get(states, ns)
       #console.log(state.name)
+      statePath.push(state.name);
       if s
         state = s
       else
         routePath = '/'
         routePath += namespace
-        s = @createControllerActionState(controllerName, "find", routePath) 
-        state.setupChild(states, ns, s)
-
-        state = s
         
         
-      statePath.push(state.name);
+        myAction = route.options.action if route.options.action?
+        children = state.get('childStates')
+        s = _.find children, (state) -> state.route == "/#{targetSegment}"
+        
+        if !s
+          s = @createControllerActionState(controllerName, "find", routePath) 
+          state.setupChild(states, ns, s)
+          state = s
+        
+          Tower.router.root[ns + "NameSpace"] = Ember.State.transitionTo(statePath.join("."))
+          Tower.router.root.eventTransitions[ns + "NameSpace"] = statePath.join(".")
+      
+      
+      
 
     
     states = Ember.get(state, 'states')
@@ -171,57 +181,70 @@ Tower.Router = Ember.Router.extend
     targetSegment = urlPieces[urlPieces.length - 1]
     myAction = route.options.action if route.options.action?
     children = state.get('childStates')
-    #console.log(children)
-    s = _.find children, (state) -> state.name == targetSegment
+
+    
+    
+    s = _.find children, (state) -> state.route == "/#{targetSegment}"
     #console.log(children, s, targetSegment)
     if targetSegment?
       statePath = [] 
       statePath = [targetSegment] if namespaces.length == 0
-    statePath.push(myAction)
-  
+    
+    statePath.push(myAction) if namespaces.length > 0
+    
     statePath = statePath.join(".")
     
-
+    console.log(s)
+    
+    myS = s
     
 
-    if !s
-      isRoot = !targetSegment?
-      targetSegment = "root" unless targetSegment?
-      routePath = '/' 
-      routePath += targetSegment unless isRoot
+    isRoot = !targetSegment?
+    targetSegment = "root" unless targetSegment?
+    routePath = '/' 
+    routePath += targetSegment unless isRoot
+  
     
-      
-      states = Ember.get(state, 'states')
-      if !states
-        states = {}
-        Ember.set(state, 'states', states)
-      s = @createControllerActionState(controllerName, "find", routePath)
-      state.setupChild(states, targetSegment.replace(":", ""), s)
-      state = s
-      
-      #if namespaces.length == 0 #handle root indexes
-      states = Ember.get(state, 'states')
-      if !states
-        states = {}
-        Ember.set(state, 'states', states)
-      
-      s = @createControllerActionState(controllerName, myAction, '/') #this where we want to land usually for actions, why?
-      state.setupChild(states, myAction, s)
-      state = s if namespaces.length > 0 #not index?
-    
-    #walk up state tree and build a name
+    states = Ember.get(state, 'states')
+    if !states
+      states = {}
+      Ember.set(state, 'states', states)
+    if namespaces.length == 0
+      s = @createControllerActionState(controllerName, myAction, routePath) 
+    else
+      s = @createControllerActionState(controllerName, myAction, routePath)
+    if namespaces.length == 0 && !isRoot
+      state.setupChild(states, targetSegment, s) if !myS
+    else
+      state.setupChild(states, myAction, s) if !myS
+    state = s
+  
     pState = state
     pathTree = []
+    sp = statePath
     while true
       pState = pState.parentState
       break if !pState? || !pState.name?
-      pathTree.push(pState.name)
-    
+      pathTree.push(pState.name) 
+
     pathNamespace = pathTree.reverse().join(".")
-    statePath = "#{pathNamespace}.#{statePath}" if pathNamespace != ""
+    if pathNamespace != ""
+      sp = "#{pathNamespace}.#{sp}"
+    else if isRoot
+      sp = "#{sp}"
+
+
+    
+  
+    Tower.router.root[methodName] = Ember.State.transitionTo(sp)
+    Tower.router.root.eventTransitions[methodName] = sp
+    
+  
+    
+    
       
-    Tower.router.root[methodName] = Ember.State.transitionTo(statePath)
-    Tower.router.root.eventTransitions[methodName] = statePath
+      #console.log(Tower.router.root[methodName])
+    
 
     undefined
 
